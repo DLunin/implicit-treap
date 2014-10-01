@@ -1,12 +1,7 @@
 from treap import Treap
 from sys import getrefcount
 
-z = { 1 };
-x = Treap().append(z)
-y = Treap().append(x)
-print(x[0])
-print(x[0])
-print(x[0])
-print(x[0])
-del x
-print(getrefcount(z))
+x = Treap().append({1}).append([2]).append((6,))
+x = x.set(1, [100500, 1])
+x = x.set(2, [100500, 1])
+print(x[1])
