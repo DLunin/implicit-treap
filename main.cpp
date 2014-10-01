@@ -2,8 +2,15 @@
 #include <utility>
 #include <memory>
 #include <queue>
-#include <Python.h>
 #include <type_traits>
+
+#define DEBUG
+#define PYTHON
+
+#ifdef PYTHON
+#include <Python.h>
+#include <boost/python.hpp>
+#endif
 
 using namespace std;
 
@@ -104,7 +111,9 @@ shared_ptr<node<T1>> build(TIter1 begin, TIter1 end) {
     return path.empty() ? nullptr : path[0];
 }
 
+#ifdef PYTHON
 void debug_pyobj(PyObject *obj) {
+#ifdef DEBUG
     cout << "===== debug_pyobj =====" << endl;
     PyObject_Print(obj, stdout, Py_PRINT_RAW); cout << endl;
     cout << "id " << (long long)obj << endl;
@@ -119,6 +128,7 @@ void debug_pyobj(PyObject *obj) {
         cout << endl;
     }
     cout << "-----------------------" << endl;
+#endif
 }
 
 template <typename T>
@@ -126,22 +136,25 @@ void py_node_decref(const node<T>* const& nd) {
     Py_DECREF(reinterpret_cast<PyObject*>(nd->val()));
 }
 
+#endif
+
 template <typename T>
 class treap {
 public:
     treap(shared_ptr<node<T>> root = nullptr) : _Root(root) { }
 
-    template<typename TIter>
+    template <typename TIter>
     treap(TIter begin, TIter end) : _Root(build<T, TIter>(begin, end)) { }
 
     size_t size() { return _Root->size(); }
 
     treap<T> append(const T& x) {
+#ifdef PYTHON
         if (std::is_same<T,PyObject*>::value) {
             Py_INCREF(reinterpret_cast<PyObject*>(x));
-            cout << "append: reference increased" << endl;
+            debug_pyobj(reinterpret_cast<PyObject*>(x));
         }
-        debug_pyobj(reinterpret_cast<PyObject*>(x));
+#endif
         return treap<T>(merge(_Root, make_shared<node<T>>(x)));
     }
 
@@ -149,11 +162,12 @@ public:
         auto splitted1 = split(_Root, index);
         auto splitted2 = split(splitted1.second, 1);
         const auto& result = splitted2.first->val();
+#ifdef PYTHON
         if (std::is_same<T,PyObject*>::value) {
             Py_INCREF(reinterpret_cast<PyObject*>(result));
-            cout << "append: reference increased" << endl;
             debug_pyobj(reinterpret_cast<PyObject*>(result));
         }
+#endif
         return result;
     }
 
@@ -175,7 +189,9 @@ public:
     size_t height() { return _Root->height(); } 
 
     ~treap() {
+#ifdef PYTHON
         _Root->foreach(py_node_decref);
+#endif
     }
 private:
     shared_ptr<node<T>> _Root;
@@ -207,8 +223,16 @@ treap<T1> operator*(const treap<T1>& lhs, int n) {
         return subres + subres;
     }
 }
+
+template <typename T1>
+treap<T1> operator*(int n, const treap<T1>& lhs) {
+    return lhs * n;
+}
     
 }
+
+#undef PYTHON
+#undef DEBUG
 
 using namespace nsp_treap;
 
@@ -218,9 +242,10 @@ int main() {
     V.push_back(1337);
     treap<int> x = treap<int>(V.begin(), V.end());
     treap<int> y = treap<int>();
-    for (int i = 1; i <= 10000; i++) 
+    for (int i = 1; i <= 100; i++) 
         y = y.append(i);
-    for (int i = 1; i <= 10000; i+=2)
+    for (int i = 1; i <= 100; i+=2)
         y = y.set(i, -y[i]);
+    cout << 2*x + y << endl;
     return 0;
 }

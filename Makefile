@@ -16,4 +16,4 @@ wrapper.o: wrapper.cpp
 	$(COMPILER) -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -c wrapper.cpp -o wrapper.o
 
 clean:
-	rm -f : *.o *.so
+	rm -f : *.o *.so a.out main
