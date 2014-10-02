@@ -12,4 +12,6 @@ BOOST_PYTHON_MODULE(treap)
         .def("__getitem__", &Treap::operator[], return_value_policy<copy_const_reference>())
         .def("set", &Treap::set)
         ;
+    
+    
 }
