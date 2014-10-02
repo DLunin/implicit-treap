@@ -20,10 +20,9 @@ int IdleSatelliteVal = 0;
 template <class T>
 struct empty_sat {  
 	empty_sat(T& val) {    }
-	inline void recalc_begin(T& val) {    }
-	inline void recalc(empty_sat<T>& val) {    }
-	inline void recalc_end(T& val) {    }
-	int& value() { return IdleSatelliteVal; }
+	inline void recalc_begin(T& val) const {    }
+	inline void recalc(empty_sat<T>& val) const {    }
+	inline void recalc_end(T& val) const {    }
 	const int& value() const { return IdleSatelliteVal; }
 };
 
@@ -34,17 +33,43 @@ public:
 
 	T& value() { return _Value; }
 	const T& value() const { return _Value; }
-	inline void recalc_begin(T& Val) {
+	inline void recalc_begin(T& Val) const {
 		_Value = Val;
 	}
-	inline void recalc(tsat<T, FOp>& Child) { 
+	inline void recalc(const tsat<T, FOp>& Child) const { 
 		_Value = FOp(_Value, Child.value());
 	}
-	inline void recalc_end(T& Val) {    }
+	inline void recalc_end(T& Val) const {    }
 
 	~tsat() {    }
 private:
-	T _Value;
+	mutable T _Value;
+};
+
+template <class T, T(*FOp)(T, T), class TNextSat>
+class sat {
+public:
+	sat(T& Val) : _Value(Val), _Next(Val) {    }
+
+	const T& value() const { return _Value; }
+	const TNextSat& next() const { return _Next; }
+	
+	inline void recalc_begin(T& Val) const {
+		_Value = Val;
+		_Next.recalc_begin(Val);
+	}
+	inline void recalc(const sat<T, FOp, TNextSat>& Child) const { 
+		_Value = FOp(_Value, Child.value());
+		_Next.recalc(Child.next());
+	}
+	inline void recalc_end(T& Val) const { 
+		_Next.recalc_end(Val);
+	}
+
+	~sat() {    }
+private:
+	mutable T _Value;
+	TNextSat _Next;
 };
 
 template <class T, class TSat=empty_sat<T>>
