@@ -98,7 +98,6 @@ public:
         ); // priority compared with singleton
 
     const size_t height() const;
-    void foreach(void (*f)(const node<T, TSat>* const)) const;
 
     template <class T1, class TSat1>
     friend const pair<shared_ptr<const node<T1, TSat1>>, shared_ptr<const node<T1, TSat1>>> split(
@@ -174,13 +173,50 @@ bool greater_priority(shared_ptr<const node<T1, TSat1>> lhs) {
 }
 
 template <class T, class TSat>
-void node<T, TSat>::foreach(void (*f)(const node<T, TSat>* const)) const {
-    if (this) {
-        f(this);
-        _Left->foreach(f);
-        _Right->foreach(f);
+void preorder_walk(shared_ptr<const node<T, TSat>> t, void (*f)(shared_ptr<const node<T, TSat>>)) {
+    if (t) {
+        f(t);
+        preorder_walk(t->left(), f);
+        preorder_walk(t->right(), f);
     }
 }
+
+template <class T, class TSat>
+void postorder_walk(shared_ptr<const node<T, TSat>> t, void (*f)(shared_ptr<const node<T, TSat>>)) {
+    if (t) {
+        postorder_walk(t->left(), f);
+        postorder_walk(t->right(), f);
+        f(t);
+    }
+}
+
+template <class T, class TSat>
+void inorder_walk(shared_ptr<const node<T, TSat>> t, void (*f)(shared_ptr<const node<T, TSat>>)) {
+    if (t) {
+        inorder_walk(t->left(), f);
+        f(t);
+        inorder_walk(t->right(), f);
+    }
+}
+
+#ifdef DEBUG
+template <class T, class TSat>
+void node_debug_print(shared_ptr<const node<T, TSat>> t) {
+    if (t) {
+        cout << '(';
+        node_debug_print(t->left());
+        cout << " ";
+#ifdef PYTHON
+        PyObject_Print(reinterpret_cast<PyObject*>(t->val()), stdout, Py_PRINT_RAW); 
+#else
+        cout << t->val();
+#endif
+        cout << " ";
+        node_debug_print(t->right());
+        cout << ")";
+    }
+}
+#endif
 
 template <class T1, class TSat1>
 const pair<shared_ptr<const node<T1, TSat1>>, shared_ptr<const node<T1, TSat1>>> split(
@@ -230,6 +266,45 @@ shared_ptr<const node<T1, TSat1>> build(TIter1 begin, TIter1 end) {
         path[i] = make_shared<const node<T1, TSat1>>(path[i]->val(), path[i]->_Left, path[i+1]);
     return path.empty() ? nullptr : path[0];
 }
+
+#ifdef PYTHON
+#ifdef DEBUG
+void debug_pyobj(PyObject *obj) {
+    cout << "===== debug_pyobj =====" << endl;
+    PyObject_Print(obj, stdout, Py_PRINT_RAW); cout << endl;
+    cout << "id " << (long long)obj << endl;
+    cout << "refcount: " << Py_REFCNT(obj) << endl;
+    if (PyList_Check(obj)) {
+        cout << "is list: " << PyList_Check(obj) << endl;
+        cout << "size: " << PyList_Size(obj) << endl;
+        cout << "elements: ";
+        for (int i = 0; i < PyList_Size(obj); i++) {
+            cout << PyList_GET_ITEM(obj, i) << " ";
+        }
+        cout << endl;
+    }
+    cout << "-----------------------" << endl;
+}
+#endif
+
+void py_incref(PyObject *obj) {
+    Py_INCREF(obj);
+}
+
+void py_decref(PyObject *obj) {
+    Py_DECREF(obj);
+}
+
+template <class T, class TSat>
+void py_node_incref(shared_ptr<const node<T, TSat>> nd) {
+    py_incref(reinterpret_cast<PyObject*>(nd->val()));
+}
+
+template <class T, class TSat>
+void py_node_decref(shared_ptr<const node<T, TSat>> nd) {
+    py_decref(reinterpret_cast<PyObject*>(nd->val()));
+}
+#endif
 
 template <class T, class TSat=empty_sat<T>>
 class node_iterator {
@@ -297,6 +372,7 @@ public:
     typedef node_iterator<T, TSat> const_iterator;
 
     treap(shared_ptr<const node<T, TSat>> root = nullptr);
+    treap(const treap& rhs);
 
     template <class TIter>
     treap(TIter begin, TIter end);
@@ -315,6 +391,13 @@ public:
     template <class T1, class TSat1>
     friend ostream& operator<<(ostream& ostr, const treap<T1, TSat1>& treap);
 
+#ifdef DEBUG
+    void debug_print() const {
+        node_debug_print(_Root);
+        cout << endl;
+    }
+#endif
+
     template <class T1, class TSat1>
     friend treap<T1, TSat1> operator+(const treap<T1, TSat1>& lhs, const treap<T1, TSat1>& rhs);
 
@@ -328,7 +411,9 @@ public:
 
     ~treap() {
 #ifdef PYTHON
-        //_Root->foreach(py_node_decref);
+        if (std::is_same<T,PyObject*>::value) {
+            postorder_walk(_Root, py_node_decref);
+        }
 #endif
     }
 private:
@@ -336,35 +421,15 @@ private:
 }; 
 
 
-#ifdef PYTHON
-void debug_pyobj(PyObject *obj) {
-#ifdef DEBUG
-    cout << "===== debug_pyobj =====" << endl;
-    PyObject_Print(obj, stdout, Py_PRINT_RAW); cout << endl;
-    cout << "id " << (long long)obj << endl;
-    cout << "refcount: " << Py_REFCNT(obj) << endl;
-    if (PyList_Check(obj)) {
-        cout << "is list: " << PyList_Check(obj) << endl;
-        cout << "size: " << PyList_Size(obj) << endl;
-        cout << "elements: ";
-        for (int i = 0; i < PyList_Size(obj); i++) {
-            cout << PyList_GET_ITEM(obj, i) << " ";
-        }
-        cout << endl;
-    }
-    cout << "-----------------------" << endl;
-#endif
-}
-
-template <class T, class TSat=empty_sat<T>>
-void py_node_decref(const node<T, TSat>* const& nd) {
-    Py_DECREF(reinterpret_cast<PyObject*>(nd->val()));
-}
-
-#endif
-
 template <class T, class TSat>
 treap<T, TSat>::treap(shared_ptr<const node<T, TSat>> root) : _Root(root) { }
+
+template <class T, class TSat>
+treap<T, TSat>::treap(const treap& rhs) : _Root(rhs._Root) {
+#ifdef PYTHON
+    postorder_walk(_Root, py_node_incref);
+#endif
+}
     
 template <class T, class TSat>
 template <class TIter>
@@ -372,13 +437,13 @@ treap<T, TSat>::treap(TIter begin, TIter end) : _Root(build<T, TSat, TIter>(begi
 
 template <class T, class TSat>
 treap<T, TSat> treap<T, TSat>::append(const T& x) const {
+    auto result = treap<T, TSat>(merge(_Root, make_shared<const node<T, TSat>>(x)));
 #ifdef PYTHON
     if (std::is_same<T,PyObject*>::value) {
-        Py_INCREF(reinterpret_cast<PyObject*>(x));
-        debug_pyobj(reinterpret_cast<PyObject*>(x));
+        postorder_walk(result._Root, py_node_incref);
     }
 #endif
-    return treap<T, TSat>(merge(_Root, make_shared<const node<T, TSat>>(x)));
+    return result;
 }
     
 template <class T, class TSat>
@@ -388,8 +453,7 @@ const T& treap<T, TSat>::operator[](size_t index) const {
     const auto& result = splitted2.first->val();
 #ifdef PYTHON
     if (std::is_same<T,PyObject*>::value) {
-        Py_INCREF(reinterpret_cast<PyObject*>(result));
-        debug_pyobj(reinterpret_cast<PyObject*>(result));
+        py_incref(reinterpret_cast<PyObject*>(result));
     }
 #endif
     return result;
@@ -399,20 +463,26 @@ template <class T, class TSat>
 treap<T, TSat> treap<T, TSat>::slice(size_t begin, size_t end) const {
     auto splitted1 = split(_Root, end);
     auto splitted2 = split(splitted1.first, begin);
-    return splitted2.second;
+    auto result = splitted2.second;
+#ifdef PYTHON
+    if (std::is_same<T,PyObject*>::value) {
+        postorder_walk(result._Root, py_node_incref);
+    }
+#endif
+    return result;
 }
 
 template <class T, class TSat>
 treap<T, TSat> treap<T, TSat>::set(size_t index, const T& val) const {
-#ifdef PYTHON
-    if (std::is_same<T,PyObject*>::value) {
-        Py_INCREF(reinterpret_cast<PyObject*>(val));
-        debug_pyobj(reinterpret_cast<PyObject*>(val));
-    }
-#endif
     auto splitted1 = split(_Root, index);
     auto splitted2 = split(splitted1.second, 1);
-    return merge(splitted1.first, merge(make_shared<const node<T, TSat>>(val), splitted2.second));
+    auto result = treap<T, TSat>(merge(splitted1.first, merge(make_shared<const node<T, TSat>>(val), splitted2.second)));
+#ifdef PYTHON
+    if (std::is_same<T,PyObject*>::value) {
+        postorder_walk(result._Root, py_node_incref);
+    }
+#endif
+    return result;
 }
 
 template <class T1, class TSat1>
@@ -427,7 +497,13 @@ ostream& operator<<(ostream& ostr, const treap<T1, TSat1>& rhs) {
 
 template <class T1, class TSat1>
 treap<T1, TSat1> operator+(const treap<T1, TSat1>& lhs, const treap<T1, TSat1>& rhs) {
-    return treap<T1, TSat1>(merge(lhs._Root, rhs._Root));
+    auto result = treap<T1, TSat1>(merge(lhs._Root, rhs._Root));
+#ifdef PYTHON
+    if (std::is_same<T1,PyObject*>::value) {
+        postorder_walk(result._Root, py_node_incref);
+    }
+#endif
+    return result;
 }
 
 template <class T1, class TSat1>
