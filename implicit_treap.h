@@ -231,10 +231,71 @@ shared_ptr<const node<T1, TSat1>> build(TIter1 begin, TIter1 end) {
     return path.empty() ? nullptr : path[0];
 }
 
+template <class T, class TSat=empty_sat<T>>
+class node_iterator {
+public:
+    node_iterator(shared_ptr<const node<T, TSat>> root) {
+        auto current = root;
+        while (current) {
+            _Path.push_back(current);
+            current = current->left();
+        }
+    }
+
+    const T& operator*() {
+        return _Path.back()->val(); 
+    }
+
+    const node_iterator& operator++() {
+        if (_Path.back()->right()) {
+            _Path.push_back(_Path.back()->right());
+            while (_Path.back()->left()) {
+                _Path.push_back(_Path.back()->left());
+            }
+        }
+        else {
+            shared_ptr<const node<T, TSat>> prev = _Path.back();
+            _Path.pop_back();
+            while (!_Path.empty()) {
+                if (_Path.back()->left() == prev) {
+                    break;
+                }
+                else {
+                    prev = _Path.back();
+                    _Path.pop_back();
+                }
+            }
+        }
+        return *this;
+    }
+
+    const node_iterator& operator++(int) {
+        return operator++();
+    }
+
+    const bool operator==(const node_iterator& rhs) {
+        if (_Path.size() != rhs._Path.size()) 
+            return false;
+        for (int i = 0; i < _Path.size(); i++) 
+            if (_Path[i] != rhs._Path[i]) 
+                return false;
+        return true;
+    }
+
+    const bool operator!=(const node_iterator& rhs) {
+        return !operator==(rhs);
+    }
+
+private:
+    vector<shared_ptr<const node<T, TSat>>> _Path;
+};
 
 template <class T, class TSat=empty_sat<T>>
 class treap {
 public:
+    typedef node_iterator<T, TSat> iterator;
+    typedef node_iterator<T, TSat> const_iterator;
+
     treap(shared_ptr<const node<T, TSat>> root = nullptr);
 
     template <class TIter>
@@ -261,6 +322,9 @@ public:
     friend treap<T1, TSat1> operator*(const treap<T1, TSat1>& lhs, int n);
 
     const size_t height() const { return _Root->height(); } 
+
+    iterator begin() const { return iterator(_Root); }
+    iterator end() const { return iterator(nullptr); }
 
     ~treap() {
 #ifdef PYTHON

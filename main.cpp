@@ -13,13 +13,14 @@ int op_max(int x, int y) {
 
 int main() {
     vector<int> V;
-    V.push_back(1337);
-    V.push_back(42);
-    auto x = treap<int, sat<int, op_plus, tsat<int, op_max>>>(V.begin(), V.end());
-    cout << x.satellite().next().value() << endl;
-    auto y = treap<int, sat<int, op_plus, tsat<int, op_max>>>();
-    for (int i = 1; i <= 100000; i++) 
-        y = y.append(rand() % 1000);
-    cout << y.slice(100, 99999).satellite().next().value() << endl;
+    for (int i = 0; i < 10; i++) {
+        V.push_back(rand() % 100);
+    }
+    auto t = treap<int, tsat<int, op_max>>(V.begin(), V.end());
+    cout << t << endl;
+    for (auto current = t.begin(), end = t.end(); current != end; current++) {
+        cout << *current << ' ';
+    }
+    cout << endl;
     return 0;
 }
