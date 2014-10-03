@@ -4,7 +4,8 @@ PYTHON_INCLUDE = /usr/include/python$(PYTHON_VERSION)
 PYTHON_LIB_DIR = /usr/lib/python$(PYTHON_VERSION)/config-3.4m-x86_64-linux-gnu
 BOOST_INC = /usr/include
 BOOST_LIB_DIR = /usr/lib/x86_64-linux-gnu
-COMPILER = g++-4.9 -std=c++14
+#DEBUG = -DDEBUG
+COMPILER = g++-4.9 -std=c++14 $(DEBUG)
 
 all: treap.so main
 
@@ -12,10 +13,10 @@ treap.so: wrapper.o
 	$(COMPILER) -shared -Wl,--export-dynamic wrapper.o -L$(BOOST_LIB_DIR) -l$(BOOST_PYTHON_LIB) -L$(PYTHON_LIB_DIR) -lpython$(PYTHON_VERSION) -o treap.so
 
 main: main.cpp
-	$(COMPILER) -DDEBUG implicit_treap.h main.cpp -o main
+	$(COMPILER) implicit_treap.h main.cpp -o main
 
 wrapper.o: wrapper.cpp
-	$(COMPILER) -DDEBUG -DPYTHON -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -c wrapper.cpp -o wrapper.o
+	$(COMPILER) -DPYTHON -I$(PYTHON_INCLUDE) -I$(BOOST_INC) -fPIC -c wrapper.cpp -o wrapper.o
 
 clean:
 	rm -f : *.o *.so a.out main

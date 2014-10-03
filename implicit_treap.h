@@ -16,6 +16,8 @@
 
 using namespace std;
 
+namespace impl {
+
 int IdleSatelliteVal = 0;
 template <class T>
 struct empty_sat {  
@@ -205,17 +207,35 @@ void node_debug_print(shared_ptr<const node<T, TSat>> t) {
     if (t) {
         cout << '(';
         node_debug_print(t->left());
-        cout << " ";
+        if (t->left())
+            cout << " ";
 #ifdef PYTHON
         PyObject_Print(reinterpret_cast<PyObject*>(t->val()), stdout, Py_PRINT_RAW); 
 #else
         cout << t->val();
 #endif
-        cout << " ";
+        if (t->right())
+            cout << " ";
         node_debug_print(t->right());
         cout << ")";
     }
 }
+#ifdef PYTHON
+template <class T, class TSat>
+void py_node_debug_print(shared_ptr<const node<T, TSat>> t) {
+    if (t) {
+        cout << '(';
+        py_node_debug_print(t->left());
+        if (t->left())
+            cout << " ";
+        cout << Py_REFCNT(reinterpret_cast<PyObject*>(t->val()));
+        if (t->right())
+            cout << " ";
+        py_node_debug_print(t->right());
+        cout << ")";
+    }
+}
+#endif
 #endif
 
 template <class T1, class TSat1>
@@ -270,20 +290,19 @@ shared_ptr<const node<T1, TSat1>> build(TIter1 begin, TIter1 end) {
 #ifdef PYTHON
 #ifdef DEBUG
 void debug_pyobj(PyObject *obj) {
-    cout << "===== debug_pyobj =====" << endl;
+    cout << "pyobject info" << endl;
     PyObject_Print(obj, stdout, Py_PRINT_RAW); cout << endl;
     cout << "id " << (long long)obj << endl;
     cout << "refcount: " << Py_REFCNT(obj) << endl;
-    if (PyList_Check(obj)) {
-        cout << "is list: " << PyList_Check(obj) << endl;
-        cout << "size: " << PyList_Size(obj) << endl;
-        cout << "elements: ";
-        for (int i = 0; i < PyList_Size(obj); i++) {
-            cout << PyList_GET_ITEM(obj, i) << " ";
-        }
-        cout << endl;
-    }
-    cout << "-----------------------" << endl;
+    //if (PyList_Check(obj)) {
+        //cout << "is list: " << PyList_Check(obj) << endl;
+        //cout << "size: " << PyList_Size(obj) << endl;
+        //cout << "elements: ";
+        //for (int i = 0; i < PyList_Size(obj); i++) {
+            //cout << PyList_GET_ITEM(obj, i) << " ";
+        //}
+        //cout << endl;
+    //}
 }
 #endif
 
@@ -365,6 +384,10 @@ private:
     vector<shared_ptr<const node<T, TSat>>> _Path;
 };
 
+} // namespace impl
+
+using namespace impl;
+
 template <class T, class TSat=empty_sat<T>>
 class treap {
 public:
@@ -380,9 +403,23 @@ public:
     const size_t size() const { return _Root->size(); }
     const TSat& satellite() const { return _Root->satellite(); }
 
-    treap<T, TSat> append(const T& x) const;
+    treap<T, TSat> push_back(const T& x) const;
+    treap<T, TSat> push_front(const T& x) const;
+    treap<T, TSat> pop_back() const;
+    treap<T, TSat> pop_front() const;
+    
+    treap<T, TSat> erase(size_t pos) const;
+    treap<T, TSat> erase(size_t begin, size_t end) const;
+    treap<T, TSat> insert(size_t pos, const T& val) const;
+    treap<T, TSat> insert(size_t pos, const treap<T, TSat>& t) const;
+    pair<treap<T, TSat>, treap<T, TSat>> split(size_t pos) const;
+
+    const bool empty() const;
 
     const T& operator[](size_t index) const;
+    const T& at(size_t index) const;
+    const T& back() const;
+    const T& front() const;
 
     treap<T, TSat> slice(size_t begin, size_t end) const;
 
@@ -390,13 +427,6 @@ public:
 
     template <class T1, class TSat1>
     friend ostream& operator<<(ostream& ostr, const treap<T1, TSat1>& treap);
-
-#ifdef DEBUG
-    void debug_print() const {
-        node_debug_print(_Root);
-        cout << endl;
-    }
-#endif
 
     template <class T1, class TSat1>
     friend treap<T1, TSat1> operator+(const treap<T1, TSat1>& lhs, const treap<T1, TSat1>& rhs);
@@ -422,34 +452,95 @@ private:
 
 
 template <class T, class TSat>
-treap<T, TSat>::treap(shared_ptr<const node<T, TSat>> root) : _Root(root) { }
+treap<T, TSat>::treap(shared_ptr<const node<T, TSat>> root) : _Root(root) { 
+#ifdef PYTHON
+    if (std::is_same<T,PyObject*>::value) {
+        postorder_walk(_Root, py_node_incref);
+    }
+#endif
+}
 
 template <class T, class TSat>
 treap<T, TSat>::treap(const treap& rhs) : _Root(rhs._Root) {
 #ifdef PYTHON
-    postorder_walk(_Root, py_node_incref);
+    if (std::is_same<T,PyObject*>::value) {
+        postorder_walk(_Root, py_node_incref);
+    }
 #endif
 }
     
 template <class T, class TSat>
 template <class TIter>
-treap<T, TSat>::treap(TIter begin, TIter end) : _Root(build<T, TSat, TIter>(begin, end)) { }
-
-template <class T, class TSat>
-treap<T, TSat> treap<T, TSat>::append(const T& x) const {
-    auto result = treap<T, TSat>(merge(_Root, make_shared<const node<T, TSat>>(x)));
+treap<T, TSat>::treap(TIter begin, TIter end) : _Root(build<T, TSat, TIter>(begin, end)) { 
 #ifdef PYTHON
     if (std::is_same<T,PyObject*>::value) {
-        postorder_walk(result._Root, py_node_incref);
+        postorder_walk(_Root, py_node_incref);
     }
 #endif
+}
+
+template <class T, class TSat>
+treap<T, TSat> treap<T, TSat>::push_back(const T& x) const {
+    return (*this) + treap<T, TSat>(make_shared<node<T, TSat>>(x));
+}
+
+template <class T, class TSat>
+treap<T, TSat> treap<T, TSat>::push_front(const T& x) const {
+    return treap<T, TSat>(make_shared<node<T, TSat>>(x)) + (*this);
+}
+
+template <class T, class TSat>
+treap<T, TSat> treap<T, TSat>::pop_back() const {
+    return erase(size() - 1);
+}
+
+template <class T, class TSat>
+treap<T, TSat> treap<T, TSat>::pop_front() const {
+    return erase(0);
+}
+
+template <class T, class TSat>
+treap<T, TSat> treap<T, TSat>::erase(size_t pos) const {
+    return erase(pos, pos+1);
+}
+
+template <class T, class TSat>
+treap<T, TSat> treap<T, TSat>::erase(size_t begin, size_t end) const {
+    auto splitted1 = impl::split(_Root, end);
+    auto splitted2 = impl::split(splitted1.first, begin);
+    auto result = treap<T, TSat>(merge(splitted2.first, splitted1.second));
     return result;
+}
+
+template <class T, class TSat>
+treap<T, TSat> treap<T, TSat>::insert(size_t pos, const T& val) const {
+    return insert(pos, treap<T, TSat>(make_shared<node<T, TSat>>(val)));
+}
+
+template <class T, class TSat>
+treap<T, TSat> treap<T, TSat>::insert(size_t pos, const treap<T, TSat>& t) const {
+    auto splitted1 = impl::split(_Root, pos);
+    auto result = treap<T, TSat>(merge(splitted1.first, merge(t._Root, splitted1.second)));
+    return result;
+}
+
+template <class T, class TSat>
+pair<treap<T, TSat>, treap<T, TSat>> treap<T, TSat>::split(size_t pos) const {
+    auto splitted1 = impl::split(_Root, pos);
+    auto result1 = treap<T, TSat>(splitted1.first);
+    auto result2 = treap<T, TSat>(splitted1.second);
+    return make_pair(result1, result2);
+}
+
+template <class T, class TSat>
+const bool treap<T, TSat>::empty() const {
+    return _Root == nullptr;
 }
     
 template <class T, class TSat>
 const T& treap<T, TSat>::operator[](size_t index) const {
-    auto splitted1 = split(_Root, index);
-    auto splitted2 = split(splitted1.second, 1);
+    auto splitted1 = impl::split(_Root, index);
+    auto splitted2 = impl::split(splitted1.second, 1);
     const auto& result = splitted2.first->val();
 #ifdef PYTHON
     if (std::is_same<T,PyObject*>::value) {
@@ -461,27 +552,17 @@ const T& treap<T, TSat>::operator[](size_t index) const {
 
 template <class T, class TSat>
 treap<T, TSat> treap<T, TSat>::slice(size_t begin, size_t end) const {
-    auto splitted1 = split(_Root, end);
-    auto splitted2 = split(splitted1.first, begin);
+    auto splitted1 = impl::split(_Root, end);
+    auto splitted2 = impl::split(splitted1.first, begin);
     auto result = splitted2.second;
-#ifdef PYTHON
-    if (std::is_same<T,PyObject*>::value) {
-        postorder_walk(result._Root, py_node_incref);
-    }
-#endif
     return result;
 }
 
 template <class T, class TSat>
 treap<T, TSat> treap<T, TSat>::set(size_t index, const T& val) const {
-    auto splitted1 = split(_Root, index);
-    auto splitted2 = split(splitted1.second, 1);
+    auto splitted1 = impl::split(_Root, index);
+    auto splitted2 = impl::split(splitted1.second, 1);
     auto result = treap<T, TSat>(merge(splitted1.first, merge(make_shared<const node<T, TSat>>(val), splitted2.second)));
-#ifdef PYTHON
-    if (std::is_same<T,PyObject*>::value) {
-        postorder_walk(result._Root, py_node_incref);
-    }
-#endif
     return result;
 }
 
@@ -498,11 +579,6 @@ ostream& operator<<(ostream& ostr, const treap<T1, TSat1>& rhs) {
 template <class T1, class TSat1>
 treap<T1, TSat1> operator+(const treap<T1, TSat1>& lhs, const treap<T1, TSat1>& rhs) {
     auto result = treap<T1, TSat1>(merge(lhs._Root, rhs._Root));
-#ifdef PYTHON
-    if (std::is_same<T1,PyObject*>::value) {
-        postorder_walk(result._Root, py_node_incref);
-    }
-#endif
     return result;
 }
 
