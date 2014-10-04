@@ -12,15 +12,11 @@ int op_max(int x, int y) {
 }
 
 int main() {
-    vector<int> V;
-    for (int i = 0; i < 10; i++) {
-        V.push_back(rand() % 100);
-    }
-    auto t = treap<int, tsat<int, op_max>>(V.begin(), V.end());
-    cout << t << endl;
-    for (auto current = t.begin(), end = t.end(); current != end; current++) {
+    auto t = treap<int>();
+    t = t.push_back(1);
+    t = t.push_back(2);
+    t = (t + t) * 10;
+    for (auto current = t.begin(), end = t.end(); current != end; current++) 
         cout << *current << ' ';
-    }
-    cout << endl;
     return 0;
 }

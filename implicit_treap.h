@@ -332,8 +332,11 @@ public:
         auto current = root;
         while (current) {
             _Path.push_back(current);
+            _Right.push_back(false);
             current = current->left();
         }
+        if (!_Right.empty()) 
+            _Right[0] = true;
     }
 
     const T& operator*() {
@@ -343,21 +346,20 @@ public:
     const node_iterator& operator++() {
         if (_Path.back()->right()) {
             _Path.push_back(_Path.back()->right());
+            _Right.push_back(true);
             while (_Path.back()->left()) {
                 _Path.push_back(_Path.back()->left());
+                _Right.push_back(false);
             }
         }
         else {
-            shared_ptr<const node<T, TSat>> prev = _Path.back();
             _Path.pop_back();
-            while (!_Path.empty()) {
-                if (_Path.back()->left() == prev) {
-                    break;
-                }
-                else {
-                    prev = _Path.back();
-                    _Path.pop_back();
-                }
+            bool right = _Right.back();
+            _Right.pop_back();
+            while (!_Path.empty() && right) {
+                _Path.pop_back();
+                right = _Right.back();
+                _Right.pop_back();
             }
         }
         return *this;
@@ -382,6 +384,7 @@ public:
 
 private:
     vector<shared_ptr<const node<T, TSat>>> _Path;
+    vector<bool> _Right;
 };
 
 } // namespace impl
@@ -394,18 +397,18 @@ public:
     typedef node_iterator<T, TSat> iterator;
     typedef node_iterator<T, TSat> const_iterator;
 
-    treap(shared_ptr<const node<T, TSat>> root = nullptr);
-    treap(const treap& rhs);
+    treap(shared_ptr<const node<T, TSat>> root = nullptr); // v
+    treap(const treap& rhs); // v
 
     template <class TIter>
-    treap(TIter begin, TIter end);
+    treap(TIter begin, TIter end); 
 
-    const size_t size() const { return _Root->size(); }
+    const size_t size() const { return _Root->size(); } // v
     const TSat& satellite() const { return _Root->satellite(); }
 
-    treap<T, TSat> push_back(const T& x) const;
-    treap<T, TSat> push_front(const T& x) const;
-    treap<T, TSat> pop_back() const;
+    treap<T, TSat> push_back(const T& x) const; // v
+    treap<T, TSat> push_front(const T& x) const; 
+    treap<T, TSat> pop_back() const; // v
     treap<T, TSat> pop_front() const;
     
     treap<T, TSat> erase(size_t pos) const;
