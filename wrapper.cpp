@@ -34,17 +34,6 @@ Treap treap_pop(const Treap *t, long long pos = -1) {
 }
 BOOST_PYTHON_FUNCTION_OVERLOADS(treap_pop_overloads, treap_pop, 1, 2)
 
-//PyObject* treap___getitem__(const Treap *t, PyObject* pos) {
-    //extract<size_t> get_pos(pos);
-    //if (get_pos.check()) {
-        //return t->operator[](get_pos());
-    //}
-    //extract<boost::python::slice> get_slice(pos); 
-    //if (get_slice.check()) {
-        //return shared_ptr<Treap>(t->slice(extract<size_t>(get_slice().start()), extract<size_t>(get_slice().stop())));
-    //}
-//}
-
 BOOST_PYTHON_MODULE(treap)
 {
     class_<Treap>("Treap")
@@ -53,6 +42,8 @@ BOOST_PYTHON_MODULE(treap)
         .def("append", &Treap::push_back)
         .def("pop", &treap_pop, treap_pop_overloads(args("self", "i"), "pop"))
         .def("__getitem__", &Treap::operator[], return_value_policy<copy_const_reference>())
+        .def("split", &Treap::split)
+        //.def("insert", &Treap::insert)
         //.def("__getitem__", &treap___getitem__)
         .def(self + self)
         .def(self * size_t())
