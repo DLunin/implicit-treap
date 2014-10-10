@@ -364,7 +364,7 @@ public:
     const bool empty() const;
 
     const T& operator[](treap_size_t index) const;
-    const T& at(treap_size_t index) const;
+    const T& at(treap_size_t index) const { return operator[](index); } 
     const T& back() const;
     const T& front() const;
 
@@ -635,7 +635,7 @@ public:
         _Impl = _Impl.insert(pos, val);
     }
     void insert(treap_size_t pos, const treap<T>& t) {
-        _Impl = _Impl.insert(pos, t);
+        _Impl = _Impl.insert(pos, t._Impl);
     }
     
     const bool empty() const {

@@ -1,4 +1,7 @@
-from treap import Treap, TreapIterator
+from treap import Treap, PersistentTreap
 from sys import getrefcount
 
-t = Treap([1, 2, 3])
+t = Treap()
+for i in range(10):
+    t.append(i)
+print(t)
