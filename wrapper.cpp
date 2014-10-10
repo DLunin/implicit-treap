@@ -1,4 +1,4 @@
-#include "main.cpp"
+#include "implicit_treap.h"
 #include <boost/python.hpp>
 #include <boost/python/slice.hpp>
 #include <string>
@@ -7,13 +7,14 @@
 using namespace std;
 using namespace boost::python;
 
-typedef treap<PyObject*> Treap;
+typedef persistent_treap<PyObject*> PersistentTreap;
+typedef node_iterator<PyObject*> PersistentTreapIterator;
 
-string treap___str__(const Treap *t) {
+string persistent_treap___str__(const PersistentTreap *t) {
     string result;
-    result += "treap([";
+    result += "persistent_treap([";
     bool atleast_once = false;
-    for (auto current = t->begin(), end = t->end(); current != end; current++) {
+    for (auto current = t->cbegin(), end = t->cend(); current != end; current++) {
         atleast_once = true;
         result += call_method<string>((*current), "__repr__");
         result += ", ";
@@ -26,29 +27,85 @@ string treap___str__(const Treap *t) {
     return result;
 }
 
-Treap treap_pop(const Treap *t, long long pos = -1) {
+PersistentTreap persistent_treap_pop(const PersistentTreap *t, long long pos = -1) {
     if (pos < 0) { 
         return t->pop_back();
     }
     return t->erase(pos);
 }
-BOOST_PYTHON_FUNCTION_OVERLOADS(treap_pop_overloads, treap_pop, 1, 2)
+BOOST_PYTHON_FUNCTION_OVERLOADS(persistent_treap_pop_overloads, persistent_treap_pop, 1, 2)
 
-BOOST_PYTHON_MODULE(treap)
+PersistentTreap persistent_treap___getitem__(const PersistentTreap *t, slice sl) {
+    treap_size_t begin = 0, end = t->size();
+    extract<treap_size_t> extract_begin(sl.start());  
+    if (extract_begin.check()) 
+        begin = extract_begin;
+    extract<treap_size_t> extract_end(sl.stop());  
+    if (extract_end.check())
+        end = extract_end;
+    return t->slice(begin, end);
+}
+
+boost::python::tuple persistent_treap_split(const PersistentTreap *t, treap_size_t pos) {
+    auto res = t->split(pos);
+    return boost::python::make_tuple(res.first, res.second);
+}
+
+PyObject* persistent_treap_iterator___next__(PersistentTreapIterator* self) {
+    if (!self->is_end()) { 
+        auto result = **self;
+        (*self)++;
+        return result;
+    }
+    else {
+        PyErr_SetNone(PyExc_StopIteration);
+        throw_error_already_set();
+        return NULL;
+    }
+}
+
+PersistentTreapIterator persistent_treap_iterator___iter__(PersistentTreapIterator* self) {
+    cout << "iterator::__iter__" << endl;
+    return *self;
+}
+
+PersistentTreapIterator persistent_treap___iter__(const PersistentTreap *self) {
+    cout << "persistent_treap::__iter__" << endl;
+    return self->cbegin();
+}
+
+BOOST_PYTHON_MODULE(persistent_treap)
 {
-    class_<Treap>("Treap")
-        .def("__len__", &Treap::size)
-        .def("__str__", &treap___str__)
-        .def("append", &Treap::push_back)
-        .def("pop", &treap_pop, treap_pop_overloads(args("self", "i"), "pop"))
-        .def("__getitem__", &Treap::operator[], return_value_policy<copy_const_reference>())
-        .def("split", &Treap::split)
-        //.def("insert", &Treap::insert)
-        //.def("__getitem__", &treap___getitem__)
+    class_<PersistentTreapIterator>("PersistentTreapIterator")
+        .def("__next__", persistent_treap_iterator___next__)
+        .def("__iter__", persistent_treap_iterator___iter__)
+        .def(self == self)
+        .def(self != self)
+        ;
+
+    PersistentTreap (PersistentTreap::*persistent_treap_insert_element)(treap_size_t, PyObject* const&) const = &PersistentTreap::insert;
+    PersistentTreap (PersistentTreap::*persistent_treap_insert_persistent_treap)(treap_size_t, const PersistentTreap&) const = &PersistentTreap::insert;
+
+    PersistentTreap (PersistentTreap::*persistent_treap_erase_single)(treap_size_t) const = &PersistentTreap::erase;
+    PersistentTreap (PersistentTreap::*persistent_treap_erase_range)(treap_size_t, treap_size_t) const = &PersistentTreap::erase;
+    
+    class_<PersistentTreap>("PersistentTreap")
+        .def("__len__", &PersistentTreap::size)
+        .def("__str__", persistent_treap___str__)
+        .def("__iter__", &PersistentTreap::cbegin)
+        .def("append", &PersistentTreap::push_back)
+        .def("pop", &persistent_treap_pop, persistent_treap_pop_overloads(args("self", "i"), "pop"))
+        .def("__getitem__", &PersistentTreap::operator[], return_value_policy<copy_const_reference>())
+        .def("__getitem__", &persistent_treap___getitem__)
+        .def("split", persistent_treap_split)
+        .def("insert", persistent_treap_insert_element)
+        .def("insert", persistent_treap_insert_persistent_treap)
+        .def("erase", persistent_treap_erase_single)
+        .def("erase", persistent_treap_erase_range)
         .def(self + self)
-        .def(self * size_t())
-        .def(size_t() * self)
-        //.def("set", &Treap::set)
+        .def(self * treap_size_t())
+        .def(treap_size_t() * self)
+        //.def("set", &PersistentTreap::set)
         ;
     
     

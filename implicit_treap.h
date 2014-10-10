@@ -17,17 +17,9 @@
 
 using namespace std;
 
-namespace impl {
+typedef int32_t treap_size_t;
 
-int IdleSatelliteVal = 0;
-template <class T>
-struct empty_sat {  
-	empty_sat(const T& val) {    }
-	inline void recalc_begin(const T& val) const {    }
-	inline void recalc(const empty_sat<T>& val) const {    }
-	inline void recalc_end(const T& val) const {    }
-	const int& val() const { return IdleSatelliteVal; }
-};
+namespace impl {
 
 template <class T>
 class node {
@@ -39,7 +31,7 @@ public:
     const shared_ptr<const node<T>> left() const;
     const shared_ptr<const node<T>> right() const;
 
-    const size_t size() const;
+    const treap_size_t size() const;
     const T& val() const;
 
     template <class T1>
@@ -53,12 +45,12 @@ public:
         shared_ptr<const node<T1>> lhs
         ); // priority compared with singleton
 
-    const size_t height() const;
+    const treap_size_t height() const;
 
     template <class T1>
     friend const pair<shared_ptr<const node<T1>>, shared_ptr<const node<T1>>> split(
         shared_ptr<const node<T1>> tree, 
-        size_t pos
+        treap_size_t pos
         );
     
     template <class T1>
@@ -73,7 +65,7 @@ public:
     ~node() { }
 private:
     T _Val;
-    size_t _Size;
+    treap_size_t _Size;
     shared_ptr<const node<T>> _Left, _Right;
     
 }; 
@@ -94,7 +86,7 @@ const shared_ptr<const node<T>> node<T>::right() const {
 }
 
 template <class T>
-const size_t node<T>::size() const { 
+const treap_size_t node<T>::size() const { 
     return this ? _Size : 0; 
 }
 
@@ -104,7 +96,7 @@ const T& node<T>::val() const {
 }
 
 template <class T>
-const size_t node<T>::height() const { 
+const treap_size_t node<T>::height() const { 
     return this ? max(left()->height(), right()->height()) + 1 : 0; 
 }
 
@@ -185,7 +177,7 @@ void py_node_debug_print(shared_ptr<const node<T>> t) {
 template <class T1>
 const pair<shared_ptr<const node<T1>>, shared_ptr<const node<T1>>> split(
     shared_ptr<const node<T1>> tree, 
-    size_t pos) {
+    treap_size_t pos) {
     
     if (!tree)
         return make_pair(nullptr, nullptr);
@@ -226,7 +218,7 @@ shared_ptr<const node<T1>> build(TIter1 begin, TIter1 end) {
         shared_ptr<const node<T1>> new_node = make_shared<const node<T1>>(*elem_ptr, prev_node_in_path, nullptr);
         path.push_back(new_node);
     }
-    for (size_t i = 0; i < path.size() - 1; i++) 
+    for (treap_size_t i = 0; i < path.size() - 1; i++) 
         path[i] = make_shared<const node<T1>>(path[i]->val(), path[i]->_Left, path[i+1]);
     return path.empty() ? nullptr : path[0];
 }
@@ -270,9 +262,9 @@ void py_node_decref(shared_ptr<const node<T>> nd) {
 #endif
 
 template <class T>
-class node_iterator {
+class node_iterator : public std::iterator<forward_iterator_tag, T> {
 public:
-    node_iterator(shared_ptr<const node<T>> root) {
+    node_iterator(shared_ptr<const node<T>> root = nullptr) {
         auto current = root;
         while (current) {
             _Path.push_back(current);
@@ -284,7 +276,13 @@ public:
     }
 
     const T& operator*() const {
-        return _Path.back()->val(); 
+        const auto& result = _Path.back()->val(); 
+#ifdef PYTHON
+        if (std::is_same<T,PyObject*>::value) {
+            py_incref(reinterpret_cast<PyObject*>(result));
+        }
+#endif
+        return result;
     }
 
     const node_iterator& operator++() {
@@ -326,6 +324,10 @@ public:
         return !operator==(rhs);
     }
 
+    const bool is_end() const {
+        return _Path.empty();
+    }
+
 private:
     vector<shared_ptr<const node<T>>> _Path;
     vector<bool> _Right;
@@ -336,56 +338,59 @@ private:
 using namespace impl;
 
 template <class T>
-class treap {
+class persistent_treap {
 public:
-    typedef node_iterator<T> iterator;
     typedef node_iterator<T> const_iterator;
 
-    treap(shared_ptr<const node<T>> root = nullptr); // v
-    treap(const treap& rhs); // v
+    persistent_treap(shared_ptr<const node<T>> root = nullptr); // v
+    persistent_treap(const persistent_treap& rhs); // v
 
     template <class TIter>
-    treap(TIter begin, TIter end); 
+    persistent_treap(TIter begin, TIter end); 
 
-    const size_t size() const { return _Root->size(); } // v
+    const treap_size_t size() const { return _Root->size(); } // v
 
-    treap<T> push_back(const T& x) const; // v
-    treap<T> push_front(const T& x) const; 
-    treap<T> pop_back() const; // v
-    treap<T> pop_front() const;
+    persistent_treap<T> push_back(const T& x) const; // v
+    persistent_treap<T> push_front(const T& x) const; 
+    persistent_treap<T> pop_back() const; // v
+    persistent_treap<T> pop_front() const;
     
-    treap<T> erase(size_t pos) const;
-    treap<T> erase(size_t begin, size_t end) const;
-    treap<T> insert(size_t pos, const T& val) const;
-    treap<T> insert(size_t pos, const treap<T>& t) const;
-    pair<treap<T>, treap<T>> split(size_t pos) const;
+    persistent_treap<T> erase(treap_size_t pos) const;
+    persistent_treap<T> erase(treap_size_t begin, treap_size_t end) const;
+    persistent_treap<T> insert(treap_size_t pos, const T& val) const;
+    persistent_treap<T> insert(treap_size_t pos, const persistent_treap<T>& t) const;
+    pair<persistent_treap<T>, persistent_treap<T>> split(treap_size_t pos) const;
 
     const bool empty() const;
 
-    const T& operator[](size_t index) const;
-    const T& at(size_t index) const;
+    const T& operator[](treap_size_t index) const;
+    const T& at(treap_size_t index) const;
     const T& back() const;
     const T& front() const;
 
-    treap<T> slice(size_t begin, size_t end) const;
+    const bool is(const persistent_treap<T>& rhs) {
+        return _Root == rhs._Root;
+    }
 
-    treap<T> set(size_t index, const T& val) const;
+    persistent_treap<T> slice(treap_size_t begin, treap_size_t end) const;
 
-    template <class T1>
-    friend ostream& operator<<(ostream& ostr, const treap<T1>& treap);
-
-    template <class T1>
-    friend treap<T1> operator+(const treap<T1>& lhs, const treap<T1>& rhs);
+    persistent_treap<T> set(treap_size_t index, const T& val) const;
 
     template <class T1>
-    friend treap<T1> operator*(const treap<T1>& lhs, int n);
+    friend ostream& operator<<(ostream& ostr, const persistent_treap<T1>& persistent_treap);
 
-    const size_t height() const { return _Root->height(); } 
+    template <class T1>
+    friend persistent_treap<T1> operator+(const persistent_treap<T1>& lhs, const persistent_treap<T1>& rhs);
 
-    iterator begin() const { return iterator(_Root); }
-    iterator end() const { return iterator(nullptr); }
+    template <class T1>
+    friend persistent_treap<T1> operator*(const persistent_treap<T1>& lhs, int n);
 
-    ~treap() {
+    const treap_size_t height() const { return _Root->height(); } 
+
+    const_iterator cbegin() const { return const_iterator(_Root); }
+    const_iterator cend() const { return const_iterator(nullptr); }
+
+    ~persistent_treap() {
 #ifdef PYTHON
         if (std::is_same<T,PyObject*>::value) {
             postorder_walk(_Root, py_node_decref);
@@ -398,7 +403,7 @@ private:
 
 
 template <class T>
-treap<T>::treap(shared_ptr<const node<T>> root) : _Root(root) { 
+persistent_treap<T>::persistent_treap(shared_ptr<const node<T>> root) : _Root(root) { 
 #ifdef PYTHON
     if (std::is_same<T,PyObject*>::value) {
         postorder_walk(_Root, py_node_incref);
@@ -407,7 +412,7 @@ treap<T>::treap(shared_ptr<const node<T>> root) : _Root(root) {
 }
 
 template <class T>
-treap<T>::treap(const treap& rhs) : _Root(rhs._Root) {
+persistent_treap<T>::persistent_treap(const persistent_treap& rhs) : _Root(rhs._Root) {
 #ifdef PYTHON
     if (std::is_same<T,PyObject*>::value) {
         postorder_walk(_Root, py_node_incref);
@@ -417,7 +422,7 @@ treap<T>::treap(const treap& rhs) : _Root(rhs._Root) {
     
 template <class T>
 template <class TIter>
-treap<T>::treap(TIter begin, TIter end) : _Root(build<T, TIter>(begin, end)) { 
+persistent_treap<T>::persistent_treap(TIter begin, TIter end) : _Root(build<T, TIter>(begin, end)) { 
 #ifdef PYTHON
     if (std::is_same<T,PyObject*>::value) {
         postorder_walk(_Root, py_node_incref);
@@ -426,65 +431,65 @@ treap<T>::treap(TIter begin, TIter end) : _Root(build<T, TIter>(begin, end)) {
 }
 
 template <class T>
-treap<T> treap<T>::push_back(const T& x) const {
-    return (*this) + treap<T>(make_shared<node<T>>(x));
+persistent_treap<T> persistent_treap<T>::push_back(const T& x) const {
+    return (*this) + persistent_treap<T>(make_shared<node<T>>(x));
 }
 
 template <class T>
-treap<T> treap<T>::push_front(const T& x) const {
-    return treap<T>(make_shared<node<T>>(x)) + (*this);
+persistent_treap<T> persistent_treap<T>::push_front(const T& x) const {
+    return persistent_treap<T>(make_shared<node<T>>(x)) + (*this);
 }
 
 template <class T>
-treap<T> treap<T>::pop_back() const {
+persistent_treap<T> persistent_treap<T>::pop_back() const {
     return erase(size() - 1);
 }
 
 template <class T>
-treap<T> treap<T>::pop_front() const {
+persistent_treap<T> persistent_treap<T>::pop_front() const {
     return erase(0);
 }
 
 template <class T>
-treap<T> treap<T>::erase(size_t pos) const {
+persistent_treap<T> persistent_treap<T>::erase(treap_size_t pos) const {
     return erase(pos, pos+1);
 }
 
 template <class T>
-treap<T> treap<T>::erase(size_t begin, size_t end) const {
+persistent_treap<T> persistent_treap<T>::erase(treap_size_t begin, treap_size_t end) const {
     auto splitted1 = impl::split(_Root, end);
     auto splitted2 = impl::split(splitted1.first, begin);
-    auto result = treap<T>(merge(splitted2.first, splitted1.second));
+    auto result = persistent_treap<T>(merge(splitted2.first, splitted1.second));
     return result;
 }
 
 template <class T>
-treap<T> treap<T>::insert(size_t pos, const T& val) const {
-    return insert(pos, treap<T>(make_shared<node<T>>(val)));
+persistent_treap<T> persistent_treap<T>::insert(treap_size_t pos, const T& val) const {
+    return insert(pos, persistent_treap<T>(make_shared<node<T>>(val)));
 }
 
 template <class T>
-treap<T> treap<T>::insert(size_t pos, const treap<T>& t) const {
+persistent_treap<T> persistent_treap<T>::insert(treap_size_t pos, const persistent_treap<T>& t) const {
     auto splitted1 = impl::split(_Root, pos);
-    auto result = treap<T>(merge(splitted1.first, merge(t._Root, splitted1.second)));
+    auto result = persistent_treap<T>(merge(splitted1.first, merge(t._Root, splitted1.second)));
     return result;
 }
 
 template <class T>
-pair<treap<T>, treap<T>> treap<T>::split(size_t pos) const {
+pair<persistent_treap<T>, persistent_treap<T>> persistent_treap<T>::split(treap_size_t pos) const {
     auto splitted1 = impl::split(_Root, pos);
-    auto result1 = treap<T>(splitted1.first);
-    auto result2 = treap<T>(splitted1.second);
+    auto result1 = persistent_treap<T>(splitted1.first);
+    auto result2 = persistent_treap<T>(splitted1.second);
     return make_pair(result1, result2);
 }
 
 template <class T>
-const bool treap<T>::empty() const {
+const bool persistent_treap<T>::empty() const {
     return _Root == nullptr;
 }
     
 template <class T>
-const T& treap<T>::operator[](size_t index) const {
+const T& persistent_treap<T>::operator[](treap_size_t index) const {
     auto splitted1 = impl::split(_Root, index);
     auto splitted2 = impl::split(splitted1.second, 1);
     const auto& result = splitted2.first->val();
@@ -497,7 +502,7 @@ const T& treap<T>::operator[](size_t index) const {
 }
 
 template <class T>
-treap<T> treap<T>::slice(size_t begin, size_t end) const {
+persistent_treap<T> persistent_treap<T>::slice(treap_size_t begin, treap_size_t end) const {
     auto splitted1 = impl::split(_Root, end);
     auto splitted2 = impl::split(splitted1.first, begin);
     auto result = splitted2.second;
@@ -505,44 +510,204 @@ treap<T> treap<T>::slice(size_t begin, size_t end) const {
 }
 
 template <class T>
-treap<T> treap<T>::set(size_t index, const T& val) const {
+persistent_treap<T> persistent_treap<T>::set(treap_size_t index, const T& val) const {
     auto splitted1 = impl::split(_Root, index);
     auto splitted2 = impl::split(splitted1.second, 1);
-    auto result = treap<T>(merge(splitted1.first, merge(make_shared<const node<T>>(val), splitted2.second)));
+    auto result = persistent_treap<T>(merge(splitted1.first, merge(make_shared<const node<T>>(val), splitted2.second)));
     return result;
 }
 
 template <class T1>
-ostream& operator<<(ostream& ostr, const treap<T1>& rhs) {
+ostream& operator<<(ostream& ostr, const persistent_treap<T1>& rhs) {
     if (rhs._Root) {
-        ostr << (treap<T1>(rhs._Root->left()));
+        ostr << (persistent_treap<T1>(rhs._Root->left()));
         ostr << rhs._Root->val() << ' ';
-        ostr << (treap<T1>(rhs._Root->right()));
+        ostr << (persistent_treap<T1>(rhs._Root->right()));
     }
     return ostr;
 }
 
 template <class T1>
-treap<T1> operator+(const treap<T1>& lhs, const treap<T1>& rhs) {
-    auto result = treap<T1>(merge(lhs._Root, rhs._Root));
+persistent_treap<T1> operator+(const persistent_treap<T1>& lhs, const persistent_treap<T1>& rhs) {
+    auto result = persistent_treap<T1>(merge(lhs._Root, rhs._Root));
     return result;
 }
 
 template <class T1>
-treap<T1> operator*(const treap<T1>& lhs, int n) {
+persistent_treap<T1> operator*(const persistent_treap<T1>& lhs, int n) {
     if (n == 0)
-        return treap<T1>();
+        return persistent_treap<T1>();
     else if (n % 2)
         return (lhs * (n - 1)) + lhs;
     else {
-        treap<T1> subres = lhs * (n / 2);
+        persistent_treap<T1> subres = lhs * (n / 2);
         return subres + subres;
     }
 }
 
 template <class T1>
-treap<T1> operator*(int n, const treap<T1>& lhs) {
+persistent_treap<T1> operator*(int n, const persistent_treap<T1>& lhs) {
     return lhs * n;
 }
 
+template <class T>
+class treap {
+public:
+    class setter {
+    public:
+        setter(persistent_treap<T>& t, treap_size_t pos) : _Tree(t), _Pos(pos) {  }
+        operator T() { 
+            return _Tree[_Pos];
+        }
+        const T& operator=(const T& rhs) {
+            _Tree = _Tree.set(_Pos, rhs);
+            return rhs;
+        }
+    private:
+        persistent_treap<T>& _Tree;
+        treap_size_t _Pos;
+    };
+
+    class iterator : public std::iterator<forward_iterator_tag, T> {
+    public:
+        iterator(persistent_treap<T>& t, treap_size_t pos = 0) : _Tree(t), _Pos(pos) {  }
+        
+        iterator operator++() {
+            _Pos++;
+            return *this;
+        }
+    
+        iterator operator++(int) {
+            return operator++();
+        }
+
+        setter operator*() const {
+            return setter(_Tree, _Pos);
+        }
+
+        const bool operator==(const iterator& rhs) const {
+            return (rhs._Tree.is(_Tree)) && _Pos == rhs._Pos;
+        }   
+
+        const bool operator!=(const iterator& rhs) const {
+            return !operator==(rhs);
+        }
+
+    private:
+        persistent_treap<T>& _Tree;
+        treap_size_t _Pos;
+    };
+
+public:
+    typedef node_iterator<T> const_iterator;
+
+    treap(const persistent_treap<T>& tr = persistent_treap<T>()) : _Impl(tr) {
+         
+    }
+
+    template <class TIter>
+    treap(TIter begin, TIter end) : _Impl(begin, end) { 
+
+    }
+
+    const treap_size_t size() const { return _Impl.size(); } 
+
+    void push_back(const T& x) {
+        _Impl = _Impl.push_back(x);
+    }
+    void push_front(const T& x) {
+        _Impl = _Impl.push_front(x);
+    }
+    void pop_back() {
+        _Impl = _Impl.pop_back();
+    }
+    void pop_front() {
+        _Impl = _Impl.pop_front();
+    }
+    
+    void erase(treap_size_t pos) {
+        _Impl = _Impl.erase(pos);
+    }
+    void erase(treap_size_t begin, treap_size_t end) {
+        _Impl = _Impl.erase(begin, end);
+    }
+    void insert(treap_size_t pos, const T& val) {
+        _Impl = _Impl.insert(pos, val);
+    }
+    void insert(treap_size_t pos, const treap<T>& t) {
+        _Impl = _Impl.insert(pos, t);
+    }
+    
+    const bool empty() const {
+        return _Impl.empty();
+    }
+
+    const T& operator[](treap_size_t index) const {
+        return _Impl[index];
+    }
+    treap<T>::setter operator[](treap_size_t index) {
+        return setter(_Impl, index);
+    }
+    const T& at(treap_size_t index) const {
+        return _Impl.at(index);
+    }
+    const T& back() const {
+        return _Impl.back();
+    }
+    const T& front() const {
+        return _Impl.front();
+    }
+    T& back() {
+        return _Impl.back();
+    }
+    T& front() {
+        return _Impl.front();
+    }
+
+    treap<T> slice(treap_size_t begin, treap_size_t end) {
+        return treap<T>(_Impl.slice(begin, end));
+    }
+
+    const bool is(const treap<T>& rhs) const {
+        return _Impl.is(rhs._Impl);
+    }
+
+    template <class T1>
+    friend ostream& operator<<(ostream& ostr, const treap<T1>& treap);
+
+    template <class T1>
+    friend treap<T1> operator+(const treap<T1>& lhs, const treap<T1>& rhs);
+
+    template <class T1>
+    friend treap<T1> operator*(const treap<T1>& lhs, int n);
+
+    iterator begin() { return iterator(_Impl, 0); }
+    iterator end() { return iterator(_Impl, size()); }
+    const_iterator cbegin() const { return _Impl.cbegin(); }
+    const_iterator cend() const { return _Impl.cend(); }
+private:
+    persistent_treap<T> _Impl;
+}; 
+
+template <class T1>
+ostream& operator<<(ostream& ostr, const treap<T1>& treap) { 
+    return ostr << treap._Impl;        
+}
+
+template <class T1>
+treap<T1> operator+(const treap<T1>& lhs, const treap<T1>& rhs) {
+    return treap<T1>(lhs._Impl + rhs._Impl);
+}
+
+template <class T1>
+treap<T1> operator*(const treap<T1>& lhs, int n) {
+    return treap<T1>(lhs._Impl * n);
+}
+
+template <class T1>
+treap<T1> operator*(int n, const treap<T1>& rhs) {
+    return rhs * n;
+}
+
 #endif
+
