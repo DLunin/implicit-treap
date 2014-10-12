@@ -12,14 +12,13 @@ typedef node_iterator<PyObject*> PersistentTreapIterator;
 typedef treap<PyObject*> Treap;
 typedef node_iterator<PyObject*> TreapIterator;
 
-
 inline object pass_through(object const& o) { return o; }
 
 template<class TIter>
 struct iterator_wrapper {
     static PyObject* next(TIter& o) {
-        if (!o.is_end()) {
-            PyErr_SetString(PyExc_StopIteration, "iteration finished");
+        if (o.is_end()) {
+            PyErr_SetNone(PyExc_StopIteration);
             throw_error_already_set();
             return NULL;
         }
@@ -32,6 +31,8 @@ struct iterator_wrapper {
       class_<TIter>(python_name.c_str(), no_init)
         .def("__next__", next)
         .def("__iter__", pass_through)
+        .def(self == self)
+        .def(self != self)
       ;
     }
 };
@@ -121,6 +122,71 @@ PyObject* treap___setitem__(Treap *self, treap_size_t pos, PyObject* value) {
     return (*self)[pos] = value;
 }
 
+class pyiter {
+public:
+    pyiter(PyObject *obj) {
+        _Iter = PyObject_CallMethod(obj, "__iter__", NULL); 
+        _Object = PyObject_CallMethod(_Iter, "__next__", NULL);
+        PyErr_Clear();
+    }
+
+    pyiter(const pyiter& rhs) : _Object(rhs._Object), _Iter(rhs._Iter) {
+        if (_Object) 
+            Py_INCREF(_Object);
+        if (_Iter) 
+            Py_INCREF(_Iter);
+    }
+
+    const pyiter& operator++() {
+        if (_Object) {
+            Py_DECREF(_Object);
+        }
+        _Object = PyObject_CallMethod(_Iter, "__next__", NULL);
+        PyErr_Clear();
+        return *this;
+    }
+
+    const pyiter& operator++(int) {
+        return operator++();
+    }
+
+    PyObject* operator*() const {
+        return _Object;
+    }
+
+    const bool operator==(const pyiter& rhs) const {
+        return rhs._Iter == _Iter && rhs._Object == _Object;
+    }
+
+    const bool operator!=(const pyiter& rhs) const {
+        return !operator==(rhs);
+    }
+
+    const pyiter end() const {
+        auto result = pyiter(*this);
+        Py_DECREF(result._Object);
+        result._Object = nullptr;
+        return result;
+    }
+
+    ~pyiter() {
+        if (_Object) 
+            Py_DECREF(_Object);
+        if (_Iter)
+            Py_DECREF(_Iter);
+    }
+private:
+    PyObject *_Object;
+    PyObject *_Iter;
+};
+
+template <typename TCont>
+shared_ptr<TCont> container___init__(PyObject *iterable) {
+    auto begin = pyiter(iterable);
+    auto end = begin.end();
+    return make_shared<TCont>(begin, end);
+}
+
 BOOST_PYTHON_MODULE(treap)
 {
     //class_<PersistentTreapIterator>("PersistentTreapIterator")
@@ -130,7 +196,7 @@ BOOST_PYTHON_MODULE(treap)
         //.def(self != self)
         //;
         
-    iterator_wrapper<PersistentTreap::const_iterator>().wrap("PersistentTreapIterator");
+    iterator_wrapper<PersistentTreap::const_iterator>().wrap("TreapIterator");
 
     PersistentTreap (PersistentTreap::*persistent_treap_insert_element)(treap_size_t, PyObject* const&) const = &PersistentTreap::insert;
     PersistentTreap (PersistentTreap::*persistent_treap_insert_treap)(treap_size_t, const PersistentTreap&) const = &PersistentTreap::insert;
@@ -139,6 +205,7 @@ BOOST_PYTHON_MODULE(treap)
     PersistentTreap (PersistentTreap::*persistent_treap_erase_range)(treap_size_t, treap_size_t) const = &PersistentTreap::erase;
     
     class_<PersistentTreap>("PersistentTreap")
+        .def("__init__", make_constructor(container___init__<PersistentTreap>))
         .def("__len__", &PersistentTreap::size)
         .def("__str__", persistent_treap___str__)
         .def("__iter__", &PersistentTreap::cbegin)
@@ -157,6 +224,7 @@ BOOST_PYTHON_MODULE(treap)
         //.def("set", &PersistentTreap::set)
         ;
 
+    //iterator_wrapper<Treap::const_iterator>().wrap("TreapIterator");
     void (Treap::*treap_insert_element)(treap_size_t, PyObject* const&) = &Treap::insert;
     void (Treap::*treap_insert_treap)(treap_size_t, const Treap&) = &Treap::insert;
 
@@ -166,6 +234,7 @@ BOOST_PYTHON_MODULE(treap)
     PyObject* const& (Treap::*treap_getitem_const)(treap_size_t) const = &Treap::operator[];
 
     class_<Treap>("Treap")
+        .def("__init__", make_constructor(container___init__<Treap>))
         .def("__len__", &Treap::size)
         .def("__str__", treap___str__)
         .def("__iter__", &Treap::cbegin)

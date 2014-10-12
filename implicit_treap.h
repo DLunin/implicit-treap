@@ -141,34 +141,34 @@ void inorder_walk(shared_ptr<const node<T>> t, void (*f)(shared_ptr<const node<T
 template <class T>
 void node_debug_print(shared_ptr<const node<T>> t) {
     if (t) {
-        cout << '(';
+        cerr << '(';
         node_debug_print(t->left());
         if (t->left())
-            cout << " ";
+            cerr << " ";
 #ifdef PYTHON
         PyObject_Print(reinterpret_cast<PyObject*>(t->val()), stdout, Py_PRINT_RAW); 
 #else
-        cout << t->val();
+        cerr << t->val();
 #endif
         if (t->right())
-            cout << " ";
+            cerr << " ";
         node_debug_print(t->right());
-        cout << ")";
+        cerr << ")";
     }
 }
 #ifdef PYTHON
 template <class T>
 void py_node_debug_print(shared_ptr<const node<T>> t) {
     if (t) {
-        cout << '(';
+        cerr << '(';
         py_node_debug_print(t->left());
         if (t->left())
-            cout << " ";
-        cout << Py_REFCNT(reinterpret_cast<PyObject*>(t->val()));
+            cerr << " ";
+        cerr << Py_REFCNT(reinterpret_cast<PyObject*>(t->val()));
         if (t->right())
-            cout << " ";
+            cerr << " ";
         py_node_debug_print(t->right());
-        cout << ")";
+        cerr << ")";
     }
 }
 #endif
@@ -212,32 +212,37 @@ shared_ptr<const node<T1>> build(TIter1 begin, TIter1 end) {
     for (TIter1 elem_ptr = begin; elem_ptr != end; elem_ptr++) {
         shared_ptr<const node<T1>> prev_node_in_path = nullptr;
         while (!path.empty() && greater_priority(path.back())) {
+            if (path.back()->right() != prev_node_in_path) {
+                path.back() = make_shared<const node<T1>>(path.back()->val(), path.back()->left(), prev_node_in_path);
+            }
             prev_node_in_path = path.back();
             path.pop_back();
         }
         shared_ptr<const node<T1>> new_node = make_shared<const node<T1>>(*elem_ptr, prev_node_in_path, nullptr);
         path.push_back(new_node);
     }
-    for (treap_size_t i = 0; i < path.size() - 1; i++) 
-        path[i] = make_shared<const node<T1>>(path[i]->val(), path[i]->_Left, path[i+1]);
+    for (treap_size_t i = path.size() - 2; i >= 0; i--) {
+        if (path[i]->right() != path[i+1]) 
+            path[i] = make_shared<const node<T1>>(path[i]->val(), path[i]->_Left, path[i+1]);
+    }
     return path.empty() ? nullptr : path[0];
 }
 
 #ifdef PYTHON
 #ifdef DEBUG
 void debug_pyobj(PyObject *obj) {
-    cout << "pyobject info" << endl;
-    PyObject_Print(obj, stdout, Py_PRINT_RAW); cout << endl;
-    cout << "id " << (long long)obj << endl;
-    cout << "refcount: " << Py_REFCNT(obj) << endl;
+    cerr << "pyobject info" << endl;
+    PyObject_Print(obj, stdout, Py_PRINT_RAW); cerr << endl;
+    cerr << "id " << (long long)obj << endl;
+    cerr << "refcount: " << Py_REFCNT(obj) << endl;
     //if (PyList_Check(obj)) {
-        //cout << "is list: " << PyList_Check(obj) << endl;
-        //cout << "size: " << PyList_Size(obj) << endl;
-        //cout << "elements: ";
+        //cerr << "is list: " << PyList_Check(obj) << endl;
+        //cerr << "size: " << PyList_Size(obj) << endl;
+        //cerr << "elements: ";
         //for (int i = 0; i < PyList_Size(obj); i++) {
-            //cout << PyList_GET_ITEM(obj, i) << " ";
+            //cerr << PyList_GET_ITEM(obj, i) << " ";
         //}
-        //cout << endl;
+        //cerr << endl;
     //}
 }
 #endif
@@ -307,8 +312,10 @@ public:
         return *this;
     }
 
-    const node_iterator& operator++(int) {
-        return operator++();
+    node_iterator operator++(int) {
+        auto res = *this;
+        operator++();
+        return res;
     }
 
     const bool operator==(const node_iterator& rhs) const {
@@ -328,7 +335,7 @@ public:
         return _Path.empty();
     }
 
-private:
+public:
     vector<shared_ptr<const node<T>>> _Path;
     vector<bool> _Right;
 };
@@ -344,6 +351,18 @@ public:
 
     persistent_treap(shared_ptr<const node<T>> root = nullptr); // v
     persistent_treap(const persistent_treap& rhs); // v
+    const persistent_treap& operator=(const persistent_treap& rhs) {
+#ifdef PYTHON
+        if (std::is_same<T,PyObject*>::value) {
+            postorder_walk(rhs._Root, py_node_incref);
+            postorder_walk(_Root, py_node_decref);
+        }
+#endif
+#ifdef DEBUG
+        cerr << "overwritten presistent_treap of size " << size() << " by persistent_treap of size " << rhs.size() << endl;
+#endif
+        _Root = rhs._Root;
+    }
 
     template <class TIter>
     persistent_treap(TIter begin, TIter end); 
@@ -391,6 +410,9 @@ public:
     const_iterator cend() const { return const_iterator(nullptr); }
 
     ~persistent_treap() {
+#ifdef DEBUG
+    cerr << "persistent_treap of size " << size() << " exterminated" << endl;
+#endif
 #ifdef PYTHON
         if (std::is_same<T,PyObject*>::value) {
             postorder_walk(_Root, py_node_decref);
@@ -409,6 +431,9 @@ persistent_treap<T>::persistent_treap(shared_ptr<const node<T>> root) : _Root(ro
         postorder_walk(_Root, py_node_incref);
     }
 #endif
+#ifdef DEBUG
+    cerr << "persistent_treap of size " << size() << " constructed" << endl;
+#endif
 }
 
 template <class T>
@@ -417,6 +442,9 @@ persistent_treap<T>::persistent_treap(const persistent_treap& rhs) : _Root(rhs._
     if (std::is_same<T,PyObject*>::value) {
         postorder_walk(_Root, py_node_incref);
     }
+#endif
+#ifdef DEBUG
+    cerr << "persistent_treap of size " << size() << " constructed" << endl;
 #endif
 }
     
@@ -427,6 +455,9 @@ persistent_treap<T>::persistent_treap(TIter begin, TIter end) : _Root(build<T, T
     if (std::is_same<T,PyObject*>::value) {
         postorder_walk(_Root, py_node_incref);
     }
+#endif
+#ifdef DEBUG
+    cerr << "persistent_treap of size " << size() << " constructed" << endl;
 #endif
 }
 
@@ -529,8 +560,7 @@ ostream& operator<<(ostream& ostr, const persistent_treap<T1>& rhs) {
 
 template <class T1>
 persistent_treap<T1> operator+(const persistent_treap<T1>& lhs, const persistent_treap<T1>& rhs) {
-    auto result = persistent_treap<T1>(merge(lhs._Root, rhs._Root));
-    return result;
+    return persistent_treap<T1>(merge(lhs._Root, rhs._Root));
 }
 
 template <class T1>
@@ -602,7 +632,7 @@ public:
     typedef node_iterator<T> const_iterator;
 
     treap(const persistent_treap<T>& tr = persistent_treap<T>()) : _Impl(tr) {
-         
+        
     }
 
     template <class TIter>
