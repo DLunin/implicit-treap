@@ -6,6 +6,7 @@
 #include <iostream>
 #include <utility>
 #include <vector>
+#include <algorithm>
 
 #ifdef PYTHON
 #include <Python.h>
@@ -404,6 +405,30 @@ public:
     template <class T1>
     friend persistent_treap<T1> operator*(const persistent_treap<T1>& lhs, int n);
 
+    const bool operator==(const persistent_treap& rhs) const {
+        return std::equal(cbegin(), cend(), rhs.cbegin(), rhs.cend());
+    }
+
+    const bool operator!=(const persistent_treap& rhs) const {
+        return !operator==(rhs);
+    }
+
+    const bool operator<(const persistent_treap& rhs) const {
+        return std::lexicographical_compare(cbegin(), cend(), rhs.cbegin(), rhs.cend());
+    }
+
+    const bool operator>(const persistent_treap& rhs) const {
+        return !operator<=(rhs);
+    }
+
+    const bool operator>=(const persistent_treap& rhs) const {
+        return !operator<(rhs);
+    }
+
+    const bool operator<=(const persistent_treap& rhs) const {
+        return operator==(rhs) || operator<(rhs);
+    }
+
     const treap_size_t height() const { return _Root->height(); } 
 
     const_iterator cbegin() const { return const_iterator(_Root); }
@@ -711,6 +736,31 @@ public:
     template <class T1>
     friend treap<T1> operator*(const treap<T1>& lhs, int n);
 
+    const bool operator==(const treap& rhs) const {
+        return _Impl == rhs._Impl;
+    }
+
+    const bool operator!=(const treap& rhs) const {
+        return _Impl != rhs._Impl;
+    }
+
+    const bool operator<(const treap& rhs) const {
+        return _Impl < rhs._Impl;
+    }
+
+    const bool operator>(const treap& rhs) const {
+        return _Impl > rhs._Impl;
+    }
+
+    const bool operator>=(const treap& rhs) const {
+        return _Impl >= rhs._Impl;
+    }
+
+    const bool operator<=(const treap& rhs) const {
+        return _Impl <= rhs._Impl;
+    }
+
+    
     iterator begin() { return iterator(_Impl, 0); }
     iterator end() { return iterator(_Impl, size()); }
     const_iterator cbegin() const { return _Impl.cbegin(); }
