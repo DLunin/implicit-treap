@@ -137,7 +137,17 @@ public:
             Py_INCREF(_Iter);
     }
 
-    const pyiter& operator++() {
+    pyiter operator=(const pyiter& rhs) {
+        Py_DECREF(_Object);
+        _Object = rhs._Object;
+        Py_INCREF(_Object);
+        Py_DECREF(_Iter);
+        _Iter = rhs._Iter;
+        Py_INCREF(_Iter);
+        return *this;
+    }
+
+    pyiter operator++() {
         if (_Object) {
             Py_DECREF(_Object);
         }
@@ -146,8 +156,10 @@ public:
         return *this;
     }
 
-    const pyiter& operator++(int) {
-        return operator++();
+    pyiter operator++(int) {
+        auto res = *this;
+        operator++();
+        return res;
     }
 
     PyObject* operator*() const {

@@ -22,6 +22,23 @@ typedef int32_t treap_size_t;
 
 namespace impl {
 
+#ifdef PYTHON
+string py_str(PyObject *obj) {
+    return boost::python::call_method<string>(obj, "__str__"); 
+}
+
+string py_repr(PyObject *obj) {
+    return boost::python::call_method<string>(obj, "__repr__"); 
+}
+
+string py_type(PyObject *obj) {
+    string result;
+    PyObject *typeobj = PyObject_Type(obj);
+    result = boost::python::call_method<string>(typeobj, "__str__");
+    Py_DECREF(typeobj);
+}
+#endif 
+
 template <class T>
 class node {
 public:
@@ -34,6 +51,12 @@ public:
 
     const treap_size_t size() const;
     const T& val() const;
+
+#ifdef PYTHON
+    const int refcount() const {
+        return Py_REFCNT(reinterpret_cast<PyObject*>(val()));
+    }
+#endif
 
     template <class T1>
     friend bool greater_priority(
@@ -63,7 +86,13 @@ public:
     template <class T1, class TIter> 
     friend shared_ptr<const node<T1>> build(TIter begin, TIter end);
 
-    ~node() { }
+    ~node() {  
+#ifdef PYTHON
+        if (std::is_same<T,PyObject*>::value) {
+            Py_DECREF(reinterpret_cast<PyObject*>(_Val));
+        }
+#endif
+    }
 private:
     T _Val;
     treap_size_t _Size;
@@ -73,6 +102,11 @@ private:
 
 template <class T>
 node<T>::node(const T& val, shared_ptr<const node<T>> left, shared_ptr<const node<T>> right) : _Val(val), _Left(left), _Right(right), _Size(1 + left->size() + right->size()) {
+#ifdef PYTHON
+    if (std::is_same<T,PyObject*>::value) {
+        Py_INCREF(reinterpret_cast<PyObject*>(_Val));
+    }
+#endif
     // TODO: calculate operation values
 }
 
@@ -139,6 +173,31 @@ void inorder_walk(shared_ptr<const node<T>> t, void (*f)(shared_ptr<const node<T
 }
 
 #ifdef DEBUG
+template <class T> 
+void structural_print(shared_ptr<const node<T>> nd) {
+    if (!nd) 
+        return;
+    if (nd->left()) {
+        structural_print(nd->left());
+        cerr << " "; 
+    }
+#ifdef PYTHON
+    if (std::is_same<T,PyObject*>::value) {
+        cerr << py_str(nd->val()) << ":" << nd->refcount();
+    }
+    else {
+#endif
+        cerr << nd->val();
+#ifdef PYTHON
+    }
+#endif
+    if (nd->right()) {
+        cerr << " (";
+        structural_print(nd->right());
+        cerr << ")";
+    }
+}
+
 template <class T>
 void node_debug_print(shared_ptr<const node<T>> t) {
     if (t) {
@@ -353,14 +412,10 @@ public:
     persistent_treap(shared_ptr<const node<T>> root = nullptr); // v
     persistent_treap(const persistent_treap& rhs); // v
     const persistent_treap& operator=(const persistent_treap& rhs) {
-#ifdef PYTHON
-        if (std::is_same<T,PyObject*>::value) {
-            postorder_walk(rhs._Root, py_node_incref);
-            postorder_walk(_Root, py_node_decref);
-        }
-#endif
 #ifdef DEBUG
-        cerr << "overwritten presistent_treap of size " << size() << " by persistent_treap of size " << rhs.size() << endl;
+        debug_method("operator=");
+        debug_print("lhs");
+        rhs.debug_print("rhs");
 #endif
         _Root = rhs._Root;
     }
@@ -434,14 +489,29 @@ public:
     const_iterator cbegin() const { return const_iterator(_Root); }
     const_iterator cend() const { return const_iterator(nullptr); }
 
+    void debug_print() const {
+        debug_print("this");
+    }
+    void debug_print(const string& name) const {
+#ifdef DEBUG
+        cerr << name << "[" << size() << "]: ";
+        structural_print(_Root);
+        cerr << endl;
+#endif
+    }
+
+    static void debug_method(const string& name) {
+        cerr << "method persistent_treap::" << name << " called" << endl;
+    }
+    
+    static void debug_method_finished(const string& name) {
+        cerr << "method persistent_treap::" << name << " finished" << endl;
+    }
+    
     ~persistent_treap() {
 #ifdef DEBUG
-    cerr << "persistent_treap of size " << size() << " exterminated" << endl;
-#endif
-#ifdef PYTHON
-        if (std::is_same<T,PyObject*>::value) {
-            postorder_walk(_Root, py_node_decref);
-        }
+        debug_method("DESTRUCTOR");
+        debug_print();
 #endif
     }
 private:
@@ -451,39 +521,15 @@ private:
 
 template <class T>
 persistent_treap<T>::persistent_treap(shared_ptr<const node<T>> root) : _Root(root) { 
-#ifdef PYTHON
-    if (std::is_same<T,PyObject*>::value) {
-        postorder_walk(_Root, py_node_incref);
-    }
-#endif
-#ifdef DEBUG
-    cerr << "persistent_treap of size " << size() << " constructed" << endl;
-#endif
 }
 
 template <class T>
 persistent_treap<T>::persistent_treap(const persistent_treap& rhs) : _Root(rhs._Root) {
-#ifdef PYTHON
-    if (std::is_same<T,PyObject*>::value) {
-        postorder_walk(_Root, py_node_incref);
-    }
-#endif
-#ifdef DEBUG
-    cerr << "persistent_treap of size " << size() << " constructed" << endl;
-#endif
 }
     
 template <class T>
 template <class TIter>
 persistent_treap<T>::persistent_treap(TIter begin, TIter end) : _Root(build<T, TIter>(begin, end)) { 
-#ifdef PYTHON
-    if (std::is_same<T,PyObject*>::value) {
-        postorder_walk(_Root, py_node_incref);
-    }
-#endif
-#ifdef DEBUG
-    cerr << "persistent_treap of size " << size() << " constructed" << endl;
-#endif
 }
 
 template <class T>
@@ -546,6 +592,10 @@ const bool persistent_treap<T>::empty() const {
     
 template <class T>
 const T& persistent_treap<T>::operator[](treap_size_t index) const {
+#ifdef DEBUG
+    debug_method("operator[]");
+    debug_print();
+#endif
     auto splitted1 = impl::split(_Root, index);
     auto splitted2 = impl::split(splitted1.second, 1);
     const auto& result = splitted2.first->val();
@@ -553,6 +603,10 @@ const T& persistent_treap<T>::operator[](treap_size_t index) const {
     if (std::is_same<T,PyObject*>::value) {
         py_incref(reinterpret_cast<PyObject*>(result));
     }
+#endif
+#ifdef DEBUG
+    debug_method_finished("operator[]");
+    debug_print();
 #endif
     return result;
 }
@@ -585,6 +639,11 @@ ostream& operator<<(ostream& ostr, const persistent_treap<T1>& rhs) {
 
 template <class T1>
 persistent_treap<T1> operator+(const persistent_treap<T1>& lhs, const persistent_treap<T1>& rhs) {
+#ifdef DEBUG
+    persistent_treap<T1>::debug_method("operator[]");
+    lhs.debug_print("lhs");
+    rhs.debug_print("rhs");
+#endif
     return persistent_treap<T1>(merge(lhs._Root, rhs._Root));
 }
 
