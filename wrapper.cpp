@@ -199,6 +199,14 @@ shared_ptr<TCont> container___init__(PyObject *iterable) {
     return make_shared<TCont>(begin, end);
 }
 
+shared_ptr<PersistentTreap> persistent_treap_from_treap(const Treap& t) {
+    return make_shared<PersistentTreap>(t);
+}
+
+shared_ptr<Treap> treap_from_persistent_treap(const PersistentTreap& t) {
+    return make_shared<Treap>(t);
+}
+
 BOOST_PYTHON_MODULE(treap)
 {
     //class_<PersistentTreapIterator>("PersistentTreapIterator")
@@ -215,9 +223,11 @@ BOOST_PYTHON_MODULE(treap)
 
     PersistentTreap (PersistentTreap::*persistent_treap_erase_single)(treap_size_t) const = &PersistentTreap::erase;
     PersistentTreap (PersistentTreap::*persistent_treap_erase_range)(treap_size_t, treap_size_t) const = &PersistentTreap::erase;
+
     
     class_<PersistentTreap>("PersistentTreap")
         .def("__init__", make_constructor(container___init__<PersistentTreap>))
+        .def("__init__", make_constructor(persistent_treap_from_treap))
         .def("__len__", &PersistentTreap::size)
         .def("__str__", persistent_treap___str__)
         .def("__repr__", persistent_treap___str__)
@@ -254,6 +264,7 @@ BOOST_PYTHON_MODULE(treap)
 
     class_<Treap>("Treap")
         .def("__init__", make_constructor(container___init__<Treap>))
+        .def("__init__", make_constructor(treap_from_persistent_treap))
         .def("__len__", &Treap::size)
         .def("__str__", treap___str__)
         .def("__repr__", treap___str__)

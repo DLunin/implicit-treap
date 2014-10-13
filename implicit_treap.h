@@ -137,12 +137,14 @@ const treap_size_t node<T>::height() const {
 
 template <class T1>
 bool greater_priority(shared_ptr<const node<T1>> lhs, shared_ptr<const node<T1>> rhs) {
-    return (rand() % (lhs->_Size + rhs->_Size)) < lhs->_Size;
+    double d = rand() / (RAND_MAX + 1.0);
+    return (d * (lhs->_Size + rhs->_Size)) < lhs->_Size;
 }
 
 template <class T1>
 bool greater_priority(shared_ptr<const node<T1>> lhs) {
-    return (rand() % (lhs->_Size + 1)) < lhs->_Size;
+    double d = rand() / (RAND_MAX + 1.0);
+    return (d * lhs->_Size + 1) < lhs->_Size;
 }
 
 template <class T>
@@ -405,18 +407,17 @@ public:
 using namespace impl;
 
 template <class T>
+class treap;
+
+template <class T>
 class persistent_treap {
 public:
     typedef node_iterator<T> const_iterator;
 
     persistent_treap(shared_ptr<const node<T>> root = nullptr); // v
     persistent_treap(const persistent_treap& rhs); // v
+    persistent_treap(const treap<T>& rhs) : persistent_treap(rhs.freeze()) { }
     const persistent_treap& operator=(const persistent_treap& rhs) {
-#ifdef DEBUG
-        debug_method("operator=");
-        debug_print("lhs");
-        rhs.debug_print("rhs");
-#endif
         _Root = rhs._Root;
     }
 
@@ -506,6 +507,10 @@ public:
     
     static void debug_method_finished(const string& name) {
         cerr << "method persistent_treap::" << name << " finished" << endl;
+    }
+
+    treap<T> thaw() const {
+        return treap<T>(*this);
     }
     
     ~persistent_treap() {
@@ -824,6 +829,10 @@ public:
     iterator end() { return iterator(_Impl, size()); }
     const_iterator cbegin() const { return _Impl.cbegin(); }
     const_iterator cend() const { return _Impl.cend(); }
+
+    const persistent_treap<T>& freeze() const {
+        return _Impl;
+    }
 private:
     persistent_treap<T> _Impl;
 }; 
