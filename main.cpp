@@ -17,13 +17,13 @@ int op_min(int x, int y) {
 }
 
 int main() {
-    auto t = treap<int>();
-    for (int i = 0; i < 10; i++) 
-        t.push_back(rand() % 100);
-    int counter = 0;
-    for (auto current = t.begin(); current != t.end(); current++) {
-        *current = ++counter;
+    int n;
+    cin >> n;
+    auto v = vector<int>(n);
+    auto t = treap<int>(v.begin(), v.end());
+    for (int i = 0; i < 10; i++) {
+        t = t + t;
     }
-    cout << t << endl;
+    cout << t.height() << endl;
     return 0;
 }

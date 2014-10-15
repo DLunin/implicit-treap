@@ -137,14 +137,14 @@ const treap_size_t node<T>::height() const {
 
 template <class T1>
 bool greater_priority(shared_ptr<const node<T1>> lhs, shared_ptr<const node<T1>> rhs) {
-    double d = rand() / (RAND_MAX + 1.0);
-    return (d * (lhs->_Size + rhs->_Size)) < lhs->_Size;
+    return (rand() % (lhs->_Size + rhs->_Size)) < lhs->_Size;
+    
 }
 
 template <class T1>
 bool greater_priority(shared_ptr<const node<T1>> lhs) {
-    double d = rand() / (RAND_MAX + 1.0);
-    return (d * lhs->_Size + 1) < lhs->_Size;
+    return rand() % 2; // I have no idea why it works
+    //return (rand() % (lhs->_Size + 1)) < lhs->_Size;
 }
 
 template <class T>
@@ -730,6 +730,7 @@ public:
     }
 
     const treap_size_t size() const { return _Impl.size(); } 
+    const treap_size_t height() const { return _Impl.height(); } 
 
     void push_back(const T& x) {
         _Impl = _Impl.push_back(x);
